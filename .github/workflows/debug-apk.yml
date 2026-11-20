@@ -1,0 +1,64 @@
+name: Build Debug APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+
+      - name: Generate translation contributor credits
+        run: python scripts/generate_translation_contributors.py
+
+      - name: Set up JDK 27
+        uses: actions/setup-java@v6
+        with:
+          java-version: 27
+          distribution: temurin
+
+      - name: Set Up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Generate debug.keystore if not exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Mobile Universal Debug APK
+        run: ./gradlew --console=plain assembleGmsMobileUniversalDebug
+        env:
+          PULL_REQUEST: 'true'
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ArchiveTune-debug-apk
+          path: app/build/outputs/apk/**/debug/*.apk
